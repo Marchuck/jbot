@@ -3,6 +3,7 @@ package me.ramswaroop.jbot.core.slack.slack;
 import me.ramswaroop.jbot.core.slack.Bot;
 import me.ramswaroop.jbot.core.slack.Controller;
 import me.ramswaroop.jbot.core.slack.EventType;
+import me.ramswaroop.jbot.core.slack.api.PastaAPI;
 import me.ramswaroop.jbot.core.slack.models.Event;
 import me.ramswaroop.jbot.core.slack.models.Message;
 import org.slf4j.Logger;
@@ -10,7 +11,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.WebSocketSession;
+import rx.Subscriber;
+import rx.schedulers.Schedulers;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Queue;
+import java.util.Random;
 import java.util.regex.Matcher;
 
 /**
@@ -24,6 +31,34 @@ import java.util.regex.Matcher;
 public class SlackBot extends Bot {
 
     private static final Logger logger = LoggerFactory.getLogger(SlackBot.class);
+    private List<CharSequence> pastas = new ArrayList<>();
+
+
+    public SlackBot() {
+        initMessages();
+    }
+
+    private void initMessages() {
+        logger.debug("initMessages");
+        getPasta().latest().subscribeOn(Schedulers.io())
+                .subscribe(new Subscriber<List<CharSequence>>() {
+                    @Override
+                    public void onCompleted() {
+                        logger.debug("onCompleted");
+                    }
+
+                    @Override
+                    public void onError(Throwable throwable) {
+                        logger.error("error", throwable);
+                    }
+
+                    @Override
+                    public void onNext(List<CharSequence> charSequences) {
+                        logger.debug("onNext");
+                        SlackBot.this.pastas = charSequences;
+                    }
+                });
+    }
 
     /**
      * Slack token from application.properties file. You can get your slack token
@@ -42,6 +77,11 @@ public class SlackBot extends Bot {
         return this;
     }
 
+
+    public boolean userTold(String messageForBot, Event event) {
+        return event.getText().toLowerCase().contains(messageForBot);
+    }
+
     /**
      * Invoked when the bot receives a direct mention (@botname: message)
      * or a direct message. NOTE: These two event types are added by jbot
@@ -53,8 +93,32 @@ public class SlackBot extends Bot {
      */
     @Controller(events = {EventType.DIRECT_MENTION, EventType.DIRECT_MESSAGE})
     public void onReceiveDM(WebSocketSession session, Event event) {
-        reply(session, event, new Message("Hi, I am " + slackService.getCurrentUser().getName()));
+
+        if (userTold("latest pasta", event)) {
+            reply(session, event, new Message("Pasta for you:\n" + randomPasta()));
+
+        } else {
+            reply(session, event, new Message(";-)"));
+        }
     }
+
+    private String randomPasta() {
+        if (pastas.size() > 1)
+            return pastas.get(new Random().nextInt(pastas.size())).toString();
+        else return "problem, sorry";
+    }
+
+    /**
+     * LAZY init
+     *
+     * @return
+     */
+    private PastaAPI getPasta() {
+        if (pastaAPI == null) pastaAPI = new PastaAPI();
+        return pastaAPI;
+    }
+
+    private PastaAPI pastaAPI;
 
     /**
      * Invoked when bot receives an event of type message with text satisfying

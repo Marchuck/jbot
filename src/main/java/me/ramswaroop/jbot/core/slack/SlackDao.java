@@ -43,7 +43,7 @@ public class SlackDao {
      * Rest template to make http calls.
      */
     private RestTemplate restTemplate;
-    
+
     public RTM startRTM(String slackToken) {
         try {
             restTemplate = new RestTemplate();
@@ -58,7 +58,9 @@ public class SlackDao {
                     try {
                         JsonNode node = p.readValueAsTree();
                         RTM rtm = new RTM();
-                        rtm.setWebSocketUrl(node.get("url").asText());
+                        String url = node.get("url").asText();
+                        System.out.println("\n\n**" + url + "**\n\n");
+                        rtm.setWebSocketUrl(url);
                         rtm.setUser(new ObjectMapper().treeToValue(node.get("self"), User.class));
                         List<String> dmChannels = new ArrayList<>();
                         Iterator<JsonNode> iterator = node.get("ims").iterator();
